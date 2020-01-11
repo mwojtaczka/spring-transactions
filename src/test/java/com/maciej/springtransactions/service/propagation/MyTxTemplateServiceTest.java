@@ -1,5 +1,6 @@
-package com.maciej.springtransactions.service;
+package com.maciej.springtransactions.service.propagation;
 
+import com.maciej.springtransactions.repository.InMemoryRepo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

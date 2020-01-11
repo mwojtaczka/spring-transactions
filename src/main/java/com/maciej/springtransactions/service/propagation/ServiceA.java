@@ -1,6 +1,7 @@
-package com.maciej.springtransactions.service;
+package com.maciej.springtransactions.service.propagation;
 
 import com.maciej.springtransactions.model.Person;
+import com.maciej.springtransactions.repository.InMemoryRepo;
 import org.springframework.stereotype.Service;
 
 @Service

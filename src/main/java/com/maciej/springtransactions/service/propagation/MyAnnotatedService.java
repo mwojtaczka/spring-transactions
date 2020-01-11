@@ -1,4 +1,4 @@
-package com.maciej.springtransactions.service;
+package com.maciej.springtransactions.service.propagation;
 
 import com.maciej.springtransactions.exception.MyException;
 import com.maciej.springtransactions.model.Person;
