@@ -1,6 +1,6 @@
-#Spring transactions
+# Spring transactions
 This repo contains examples of Spring transactions usage.
-##Where to start
+## Where to start
 To start I recommend clone repo and go through code starting from test classes:
 - MyAnnotatedServiceTest - contains usage of @Transactional annotation
 - MyAnnotatedServicePropagationTest - again @Transactional annotation but with couple of examples of 
