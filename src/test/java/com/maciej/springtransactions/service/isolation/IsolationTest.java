@@ -2,7 +2,7 @@ package com.maciej.springtransactions.service.isolation;
 
 import com.maciej.springtransactions.model.Person;
 import com.maciej.springtransactions.repository.InMemoryRepo;
-import org.assertj.core.api.Assertions;
+import org.hibernate.exception.LockAcquisitionException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import java.math.BigDecimal;
@@ -21,6 +22,7 @@ import java.util.concurrent.ExecutionException;
 import static java.util.concurrent.CompletableFuture.runAsync;
 import static java.util.concurrent.CompletableFuture.supplyAsync;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @ExtendWith(SpringExtension.class)
 @SpringBootTest
@@ -47,7 +49,43 @@ class IsolationTest {
     }
 
     @Test
-    @DisplayName("should lost update from QuickService")
+    @DisplayName("should read uncommitted data")
+    void dirtyRead() {
+        final CompletableFuture<Void> future = runAsync(() -> slowService.depositMoney_andFail("John", BigDecimal.TEN));
+        sleep(100);
+        final Person dirtyJohn = slowService.getById_readUncommitted("John").orElseThrow();
+
+        try {
+            future.get();
+        } catch (InterruptedException | ExecutionException e) {
+            e.printStackTrace();
+        }
+
+        Person actualJohn = repo.findById("John").orElseThrow();
+        assertThat(dirtyJohn.getMoney()).usingComparator(BigDecimal::compareTo).isEqualTo(BigDecimal.TEN);
+        assertThat(actualJohn.getMoney()).usingComparator(BigDecimal::compareTo).isEqualTo(BigDecimal.ZERO);
+    }
+
+    @Test
+    @DisplayName("should read uncommitted data")
+    void read() {
+        final CompletableFuture<Void> future = runAsync(() -> slowService.depositMoney_andFail("John", BigDecimal.TEN));
+        sleep(100);
+        final Person dirtyJohn = slowService.getById_readCommitted("John").orElseThrow();
+
+        try {
+            future.get();
+        } catch (InterruptedException | ExecutionException e) {
+            e.printStackTrace();
+        }
+
+        Person actualJohn = repo.findById("John").orElseThrow();
+        assertThat(dirtyJohn.getMoney()).usingComparator(BigDecimal::compareTo).isEqualTo(BigDecimal.ZERO);
+        assertThat(actualJohn.getMoney()).usingComparator(BigDecimal::compareTo).isEqualTo(BigDecimal.ZERO);
+    }
+
+    @Test
+    @DisplayName("should lose update from QuickService")
     void lostUpdate() throws ExecutionException, InterruptedException {
 
         final CompletableFuture<Void> future = runAsync(() -> slowService.depositMoney("John", BigDecimal.TEN));
@@ -60,18 +98,22 @@ class IsolationTest {
     }
 
     @Test
-    @Disabled("doesn't work, at least with H2")
-    @DisplayName("should not lost update from QuickService")
+//    @Disabled("doesn't work, at least with H2")
+    @DisplayName("should throw exception when resource is locked by other transaction")
     void update() throws ExecutionException, InterruptedException {
 
         final CompletableFuture<Void> future =
                 runAsync(() -> slowService.depositMoney_transactional("John", BigDecimal.TEN));
-        quickService.depositMoney_transactional("John", BigDecimal.ONE);
+        sleep(100);
+
+        assertThatThrownBy(() -> quickService.depositMoney_transactional("John", BigDecimal.ONE))
+                .isInstanceOf(CannotAcquireLockException.class);
+
         future.get();
 
         final Person john = repo.findById("John").orElseThrow();
 
-        assertThat(john.getMoney()).usingComparator(BigDecimal::compareTo).isEqualTo(BigDecimal.valueOf(11));
+        assertThat(john.getMoney()).usingComparator(BigDecimal::compareTo).isEqualTo(BigDecimal.valueOf(10));
     }
 
     @Test
@@ -111,7 +153,7 @@ class IsolationTest {
     }
 
     @Test
-    @DisplayName("should return 2 different result sets when retrievals are not in transaction")
+    @DisplayName("should return 2 different result sets when retrievals are in read_committed transaction")
     void phantomReads() throws ExecutionException, InterruptedException {
 
         final CompletableFuture<List<List<Person>>> twoResultsFuture =
@@ -125,7 +167,6 @@ class IsolationTest {
         assertThat(twoResultSets.get(0).size()).isNotEqualTo(twoResultSets.get(1).size());
     }
 
-    //this test doesn't pass for H2, checked for mySQL and works
     @Test
     @DisplayName("should return 2 same result sets when retrievals are not in transaction")
     void noPhantomReads() throws ExecutionException, InterruptedException {

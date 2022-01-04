@@ -2,14 +2,13 @@ package com.maciej.springtransactions.service.isolation;
 
 import com.maciej.springtransactions.model.Person;
 import com.maciej.springtransactions.repository.InMemoryRepo;
-import org.hibernate.Session;
-import org.springframework.orm.hibernate5.SessionHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class SlowService {
@@ -29,6 +28,26 @@ public class SlowService {
     }
 
     @Transactional
+    public void depositMoney_andFail(String id, BigDecimal deposit) {
+        final Person person = repo.findById(id).orElseThrow();
+        final BigDecimal current = person.getMoney();
+        person.setMoney(current.add(deposit));
+        repo.saveAndFlush(person);
+        sleep(1000);
+        throw new RuntimeException();
+    }
+
+    @Transactional(isolation = Isolation.READ_UNCOMMITTED)
+    public Optional<Person> getById_readUncommitted(String id) {
+        return repo.findById(id);
+    }
+
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public Optional<Person> getById_readCommitted(String id) {
+        return repo.findById(id);
+    }
+
+    @Transactional(isolation = Isolation.SERIALIZABLE)
     public void depositMoney_transactional(String id, BigDecimal deposit) {
         final Person person = repo.findById(id).orElseThrow();
         final BigDecimal current = person.getMoney();
@@ -60,6 +79,7 @@ public class SlowService {
         return List.of(firstRetrieval, secondRetrieval);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public List<List<Person>> getAllWithSurname(String surname) {
         final List<Person> bySurname = repo.findBySurname(surname);
         System.out.println(repo.findAll());
